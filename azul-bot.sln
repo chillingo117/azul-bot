@@ -3,6 +3,8 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzulLambda", "AzulLambda\AzulLambda.csproj", "{BF135A1C-868E-C384-10B0-BFBFEF40767D}"
+Project("{6c8a3e0e-2f47-42e4-928c-75c2e7357aa0}") = "LambdaProxy", "LambdaProxy\LambdaProxy.csproj", "{NEW-GUID}"
+
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
