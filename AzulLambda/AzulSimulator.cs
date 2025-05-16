@@ -235,7 +235,7 @@ namespace AzulLambda
             }
 
             // Generate moves based on center
-            foreach (var tile in GameState.Center)
+            foreach (var tile in GameState.Center.DistinctBy(tile => tile.Color))
             {
                 for (int i = 0; i < GameState.Players[GameState.CurrentPlayerIndex].Board.PatternLines.Count; i++)
                 {
