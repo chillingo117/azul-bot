@@ -1,8 +1,5 @@
 using System.Text.Json;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using System.Text.Json.Serialization;
 using AzulLambda;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,7 +20,7 @@ var app = builder.Build();
 app.UseCors();
 
 // Single endpoint to invoke the Lambda function
-app.MapPost("/lambda", async (HttpContext context) =>
+app.MapPost("/lambda/mcts", async (HttpContext context) =>
 {
     try
     {
@@ -34,7 +31,8 @@ app.MapPost("/lambda", async (HttpContext context) =>
         // Deserialize the input into a GameState object
         var gameState = JsonSerializer.Deserialize<GameState>(requestBody, new JsonSerializerOptions
         {
-            PropertyNameCaseInsensitive = true
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
         });
 
         if (gameState == null)
@@ -45,12 +43,12 @@ app.MapPost("/lambda", async (HttpContext context) =>
         }
 
         // Call the Lambda function
-        var lambdaFunction = new AzulMCTSFunction();
-        var result = lambdaFunction.Handle(requestBody);
+        var lambdaResult = AzulMCTSFunction.Handle(requestBody);
 
         // Return the result
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync(result);
+        Console.WriteLine($"Lambda result: {lambdaResult}");
+        await context.Response.WriteAsync(lambdaResult);
     }
     catch (Exception ex)
     {
@@ -58,6 +56,9 @@ app.MapPost("/lambda", async (HttpContext context) =>
         await context.Response.WriteAsync($"Error executing Lambda: {ex.Message}");
     }
 });
+
+// heartbeat so the frontend can check if the server is available
+app.MapGet("/heartbeat", () => "Ok");
 
 app.MapGet("/", () => "Lambda Proxy Server is running. Send POST requests to /lambda to invoke the Lambda function.");
 

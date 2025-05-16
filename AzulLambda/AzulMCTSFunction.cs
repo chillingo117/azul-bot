@@ -1,22 +1,44 @@
-using System;
 using System.Text.Json;
-using AzulLambda;
+using System.Collections.Generic;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.Serialization.SystemTextJson;
+using System.Text.Json.Serialization;
 
 [assembly: LambdaSerializer(typeof(DefaultLambdaJsonSerializer))]
 
 namespace AzulLambda
 {
-    public class AzulMCTSFunction
+    public static class AzulMCTSFunction
     {
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
         };
 
-        public string Handle(string input)
+        public static Func<GameState, Move> RunMCTS()
+        {
+            return gameState =>
+            {
+                // Use CurrentPlayerIndex directly
+                int currentPlayerId = gameState.CurrentPlayerIndex;
+
+                // Instantiate the MyTeamAgent
+                var agent = new MCTSAgent(currentPlayerId);
+
+                // Generate the list of legal actions using GameState
+                List<Move> actions = new AzulSimulator(gameState).GenerateLegalActions();
+                if (actions.Count == 0)
+                {
+                    throw new InvalidOperationException("No legal actions available.");
+                }
+                // Use the agent to select the best action
+                return agent.SelectAction(actions, gameState);
+            };
+        }
+
+        public static string Handle(string input)
         {
             try
             {
@@ -24,7 +46,7 @@ namespace AzulLambda
                 var gameState = ParseGameState(input);
 
                 // Run MCTS to determine the best move
-                var bestMove = RunMCTS(gameState);
+                var bestMove = RunMCTS()(gameState);
 
                 // Return the best move as a JSON string
                 return SerializeMove(bestMove);
@@ -36,7 +58,7 @@ namespace AzulLambda
             }
         }
 
-        private GameState ParseGameState(string input)
+        private static GameState ParseGameState(string input)
         {
             try
             {
@@ -53,43 +75,69 @@ namespace AzulLambda
             }
         }
 
-        private Move RunMCTS(GameState gameState)
-        {
-            // TODO: Implement the actual MCTS algorithm here
-            // For now, return a simple placeholder move
-            
-            // This is just a placeholder implementation
-            // Find the first factory with tiles
-            var factoryWithTiles = gameState.Factories.Find(f => f.Tiles.Count > 0);
-            
-            if (factoryWithTiles != null && factoryWithTiles.Tiles.Count > 0)
-            {
-                var color = factoryWithTiles.Tiles[0].Color;
-                return new Move
-                {
-                    FactoryId = factoryWithTiles.Id,
-                    Color = color,
-                    PatternLine = 0 // Just place in the first pattern line for now
-                };
-            }
-            else if (gameState.Center.Count > 0)
-            {
-                // If no factories have tiles, use the center
-                return new Move
-                {
-                    FactoryId = null, // null indicates the center
-                    Color = gameState.Center[0].Color,
-                    PatternLine = 0
-                };
-            }
-            
-            // Fallback - shouldn't happen in a valid game state
-            return new Move { FactoryId = null, Color = Color.Blue, PatternLine = 0 };
-        }
-
-        private string SerializeMove(Move move)
+        private static string SerializeMove(Move move)
         {
             return JsonSerializer.Serialize(move, JsonOptions);
+        }
+
+        private static List<Move> GenerateLegalActions(GameState gameState)
+        {
+            var actions = new List<Move>();
+
+            // Generate moves based on factories
+            foreach (var factory in gameState.Factories)
+            {
+                if (factory.Tiles.Count == 0)
+                {
+                    // Skip empty factories
+                    continue;
+                }
+
+                foreach (var tile in factory.Tiles)
+                {
+                    for (int i = 0; i < 5; i++) // 5 pattern lines
+                    {
+                        actions.Add(new Move
+                        {
+                            FactoryId = factory.Id,
+                            Color = tile.Color,
+                            PatternLine = i
+                        });
+                    }
+
+                    // Add move for floor line (-1 indicates floor line)
+                    actions.Add(new Move
+                    {
+                        FactoryId = factory.Id,
+                        Color = tile.Color,
+                        PatternLine = -1
+                    });
+                }
+            }
+
+            // Generate moves based on center
+            foreach (var tile in gameState.Center)
+            {
+                for (int i = 0; i < 5; i++) // 5 pattern lines
+                {
+                    actions.Add(new Move
+                    {
+                        FactoryId = null,
+                        Color = tile.Color,
+                        PatternLine = i
+                    });
+                }
+
+                // Add move for floor line (-1 indicates floor line)
+                actions.Add(new Move
+                {
+                    FactoryId = null,
+                    Color = tile.Color,
+                    PatternLine = -1
+                });
+            }
+
+            return actions;
         }
     }
 }

@@ -5,10 +5,15 @@ namespace AzulLambda
 {
     public enum Color
     {
+        [StringValue("Blue")]
         Blue,
+        [StringValue("Yellow")]
         Yellow,
+        [StringValue("Red")]
         Red,
+        [StringValue("Black")]
         Black,
+        [StringValue("White")]
         White
     }
 

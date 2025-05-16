@@ -14,9 +14,14 @@ namespace AzulLambda
             GameState = gameState ?? throw new ArgumentNullException(nameof(gameState));
         }
 
-        public bool MakeMove(int playerId, int? factoryId, Color color, int patternLine)
+        public void MakeMove(int playerId, int? factoryId, Color color, int patternLine, out bool gameOver)
         {
-            var player = GameState.Players[playerId];
+            if (playerId != GameState.CurrentPlayerIndex)
+            {
+                throw new InvalidOperationException($"Not player {playerId} turn, it is {GameState.CurrentPlayerIndex}.");
+            }
+            gameOver = false;
+            var player = GameState.Players[GameState.CurrentPlayerIndex];
             var selectedTiles = SelectTiles(factoryId, color);
 
             if (patternLine == -1)
@@ -39,7 +44,7 @@ namespace AzulLambda
                 EndRound();
             }
 
-            return IsGameOver();
+            gameOver = IsGameOver();
         }
 
         private List<Tile> SelectTiles(int? factoryId, Color color)
@@ -96,7 +101,7 @@ namespace AzulLambda
 
         private void AdvanceToNextPlayer()
         {
-            GameState.CurrentPlayerIndex = (GameState.CurrentPlayerIndex + 1) % GameState.Players.Count;
+            GameState.CurrentPlayerIndex = (GameState.CurrentPlayerIndex + 1) % 2;
         }
 
         private bool IsRoundOver()
@@ -181,6 +186,86 @@ namespace AzulLambda
         private bool IsGameOver()
         {
             return GameState.Players.Any(player => player.Board.Wall.Any(row => row.All(tile => tile != null)));
+        }
+
+        public List<Move> GenerateLegalActions()
+        {
+            var actions = new List<Move>();
+
+            // Generate moves based on factories
+            foreach (var factory in GameState.Factories)
+            {
+                if (factory.Tiles.Count == 0)
+                    continue;
+
+                // distinct by color to avoid duplicate actions
+                foreach (var tile in factory.Tiles.DistinctBy(tile => tile.Color))
+                {
+                    // Check each pattern line (0-4)
+                    for (int i = 0; i < GameState.Players[GameState.CurrentPlayerIndex].Board.PatternLines.Count; i++)
+                    {
+                        var line = GameState.Players[GameState.CurrentPlayerIndex].Board.PatternLines[i];
+
+                        bool lineHasDifferentColor = line.Any(t => t != null && t.Color != tile.Color);
+                        bool lineIsFull = line.All(t => t != null);
+                        var wallRow = GameState.Players[GameState.CurrentPlayerIndex].Board.Wall[i];
+                        bool wallHasColor = wallRow.Any(t => t != null && t.Color == tile.Color);
+
+                        // Check if the line is not full, does not have a different color, and the wall does not have the same color
+                        // Technically the wall check is not necessary, but you may as well just send the tiles to the floor in that case
+                        if (!lineHasDifferentColor && !lineIsFull && !wallHasColor)
+                        {
+                            actions.Add(new Move
+                            {
+                                FactoryId = factory.Id,
+                                Color = tile.Color,
+                                PatternLine = i
+                            });
+                        }
+                    }
+
+                    // Add move for floor line (-1 indicates floor line)
+                    actions.Add(new Move
+                    {
+                        FactoryId = factory.Id,
+                        Color = tile.Color,
+                        PatternLine = -1
+                    });
+                }
+            }
+
+            // Generate moves based on center
+            foreach (var tile in GameState.Center)
+            {
+                for (int i = 0; i < GameState.Players[GameState.CurrentPlayerIndex].Board.PatternLines.Count; i++)
+                {
+                    var line = GameState.Players[GameState.CurrentPlayerIndex].Board.PatternLines[i];
+                    bool lineHasDifferentColor = line.Any(t => t != null && t.Color != tile.Color);
+                    bool lineIsFull = line.All(t => t != null);
+                    var wallRow = GameState.Players[GameState.CurrentPlayerIndex].Board.Wall[i];
+                    bool wallHasColor = wallRow.Any(t => t != null && t.Color == tile.Color);
+
+                    if (!lineHasDifferentColor && !lineIsFull && !wallHasColor)
+                    {
+                        actions.Add(new Move
+                        {
+                            FactoryId = null,
+                            Color = tile.Color,
+                            PatternLine = i
+                        });
+                    }
+                }
+
+                // Add move for floor line (-1 indicates floor line)
+                actions.Add(new Move
+                {
+                    FactoryId = null,
+                    Color = tile.Color,
+                    PatternLine = -1
+                });
+            }
+
+            return actions;
         }
     }
 }
